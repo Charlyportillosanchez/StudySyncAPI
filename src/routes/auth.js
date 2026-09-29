@@ -19,13 +19,13 @@ function generarCodigo() {
 async function enviarCodigoVerificacion(email, nombre, codigo) {
   try {
     const { error } = await resend.emails.send({
-      from: 'IoTGaraje <onboarding@resend.dev>',
+      from: 'AutoSpot <onboarding@resend.dev>',
       to: email,
       subject: `Tu código de verificación: ${codigo}`,
       html: `
         <div style="font-family:Arial,sans-serif;max-width:480px;margin:0 auto">
           <h2 style="color:#1A237E">¡Hola ${nombre}!</h2>
-          <p>Gracias por registrarte en <b>IoTGaraje</b>. Tu código de verificación es:</p>
+          <p>Gracias por registrarte en <b>AutoSpot</b>. Tu código de verificación es:</p>
           <p style="font-size:36px;font-weight:bold;letter-spacing:8px;color:#FF6F00;text-align:center">${codigo}</p>
           <p style="color:#6B7280">El código vence en 15 minutos. Si no creaste esta cuenta, ignora este correo.</p>
         </div>`,

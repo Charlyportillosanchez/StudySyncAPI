@@ -59,7 +59,7 @@ const reservasRoutes = require('./routes/reservas.routes');
 
 app.get('/', (req, res) => {
   res.json({ 
-    mensaje: 'IoTGaraje API funcionando',
+    mensaje: 'AutoSpot API funcionando',
     version: '1.0.0',
     docs: '/api-docs'
   });

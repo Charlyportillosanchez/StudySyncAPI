@@ -1,4 +1,4 @@
-// Avisos push de IoTGaraje: qué se le dice a quién y cuándo.
+// Avisos push de AutoSpot: qué se le dice a quién y cuándo.
 //
 // Cada función devuelve una promesa que nunca falla, así los controladores
 // pueden llamarlas sin esperar ni preocuparse por errores de Firebase.
