@@ -5,7 +5,8 @@ const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const { Server } = require('socket.io');
-const { setIO } = require('./realtime');
+const { setIO, emitirA, identificarSocket, salaDe } = require('./realtime');
+const { crearRastreo } = require('./rastreo');
 dotenv.config();
 
 const swaggerUi = require('swagger-ui-express');
@@ -86,23 +87,31 @@ const io = new Server(server, {
   cors: { origin: '*', methods: ['GET', 'POST'] },
 });
 setIO(io);
+io.use(identificarSocket);
+
+const supabase = require('./db');
+const rastreo = crearRastreo({ supabase, emitirA });
 
 io.on('connection', (socket) => {
-  console.log(`[Socket] Cliente conectado: ${socket.id}`);
+  const usuario = socket.data.usuario;
+  console.log(`[Socket] Cliente conectado: ${socket.id}` +
+    (usuario ? ` (usuario ${usuario.id})` : ' (anónimo)'));
+
+  // Cada usuario identificado entra a su sala privada: ahí le llegan sus
+  // mensajes de chat y la ubicación de los autos que van a sus garajes.
+  if (usuario && usuario.id != null) socket.join(salaDe(usuario.id));
 
   // Rastreo en vivo: el cliente que va en camino envía su ubicación y el
-  // servidor la retransmite a quien esté rastreando esa reserva (el dueño).
+  // servidor la reenvía solo al dueño del garaje de esa reserva.
   socket.on('ubicacion', (data) => {
-    if (data && data.reservaId != null) {
-      io.emit('ubicacion', data);
-    }
+    rastreo.reenviar(usuario, 'ubicacion', data).catch((err) =>
+      console.error('[Socket] Error en ubicacion:', err.message));
   });
 
   // El cliente avisa que dejó de compartir (llegó o canceló).
   socket.on('fin_ubicacion', (data) => {
-    if (data && data.reservaId != null) {
-      io.emit('fin_ubicacion', data);
-    }
+    rastreo.reenviar(usuario, 'fin_ubicacion', data).catch((err) =>
+      console.error('[Socket] Error en fin_ubicacion:', err.message));
   });
 
   socket.on('disconnect', () => {

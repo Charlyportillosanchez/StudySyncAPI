@@ -1,5 +1,5 @@
 const supabase = require('../db');
-const { emitir } = require('../realtime');
+const { emitirA } = require('../realtime');
 
 // Una conversación se identifica por (garaje_id, cliente_id).
 // Participantes válidos: el cliente y el dueño del garaje (o un admin).
@@ -110,8 +110,12 @@ exports.enviar = async (req, res) => {
     .select('id, emisor_id, texto, created_at');
   if (error) return res.status(500).json({ error: error.message });
 
-  // Tiempo real: el otro participante lo recibe al instante.
-  emitir(`chat:${garajeId}:${clienteId}`, data[0]);
+  // Tiempo real: solo los dos participantes (cliente y dueño) lo reciben.
+  emitirA(
+    [Number(clienteId), permiso.garaje.usuario_id],
+    `chat:${garajeId}:${clienteId}`,
+    data[0],
+  );
 
   res.status(201).json(data[0]);
 };
