@@ -1,6 +1,7 @@
 const supabase = require('../db');
 const { pub } = require('../redis/client');
 const { emitir } = require('../realtime');
+const avisos = require('../avisos');
 const { ocupadosEnVentana, ocupadosAhora } = require('../utils/ocupacion');
 
 exports.getAll = async (req, res) => {
@@ -133,6 +134,7 @@ exports.create = async (req, res) => {
 
   // Tiempo real: el mapa y el panel del dueño se actualizan al instante.
   emitir('actualizacion', { tipo: 'RESERVA_CREADA', garaje_id });
+  avisos.reservaNueva(data[0], garaje);
 
   res.status(201).json(data[0]);
 };
@@ -142,7 +144,7 @@ exports.revisar = async (req, res) => {
   const aprobar = req.body.aprobar === true;
 
   const { data: reserva, error: buscarError } = await supabase
-    .from('reservas').select('*, garajes(usuario_id, capacidad)')
+    .from('reservas').select('*, garajes(usuario_id, capacidad, nombre)')
     .eq('id', req.params.id).single();
   if (buscarError || !reserva) return res.status(404).json({ error: 'Reserva no encontrada' });
 
@@ -171,6 +173,7 @@ exports.revisar = async (req, res) => {
     .update({ disponible: ocupadosAhora(vigentes) < capacidad }).eq('id', garajeId);
 
   emitir('actualizacion', { tipo: 'RESERVA_REVISADA', garaje_id: garajeId });
+  avisos.reservaRevisada(reserva, reserva.garajes?.nombre || 'El garaje', aprobar);
 
   res.status(200).json({
     mensaje: aprobar ? 'Reserva aceptada' : 'Reserva rechazada',
@@ -198,7 +201,7 @@ exports.cancelar = async (req, res) => {
   // que ocupan espacio en este momento.
   const garajeId = data[0].garaje_id;
   const { data: garaje } = await supabase
-    .from('garajes').select('capacidad').eq('id', garajeId).single();
+    .from('garajes').select('capacidad, usuario_id, nombre').eq('id', garajeId).single();
   const capacidad = Number(garaje?.capacidad) > 0 ? Number(garaje.capacidad) : 1;
   const { data: activas } = await supabase
     .from('reservas').select('*').eq('garaje_id', garajeId).eq('estado', 'activa');
@@ -213,6 +216,7 @@ exports.cancelar = async (req, res) => {
   }));
 
   emitir('actualizacion', { tipo: 'RESERVA_CANCELADA', garaje_id: garajeId });
+  if (garaje) avisos.reservaCancelada(data[0], garaje);
 
   res.status(200).json({ mensaje: 'Reserva cancelada', reserva: data[0] });
 };

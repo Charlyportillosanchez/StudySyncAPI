@@ -1,11 +1,11 @@
 // Pruebas del rastreo en vivo sin base de datos ni servidor real.
-const { crearRastreo, DURACION_CACHE_MS } = require('../src/rastreo');
+const { crearRastreo, DURACION_CACHE_MS, PAUSA_AVISO_MS } = require('../src/rastreo');
 
 // Reserva 10: cliente 7, garaje del dueño 3, activa.
 // Reserva 11: cliente 7, garaje del dueño 3, finalizada.
 const reservas = {
-  10: { id: 10, usuario_id: 7, estado: 'activa', garajes: { usuario_id: 3 } },
-  11: { id: 11, usuario_id: 7, estado: 'finalizada', garajes: { usuario_id: 3 } },
+  10: { id: 10, usuario_id: 7, estado: 'activa', garajes: { usuario_id: 3, nombre: 'Garaje Equipetrol' } },
+  11: { id: 11, usuario_id: 7, estado: 'finalizada', garajes: { usuario_id: 3, nombre: 'Garaje Equipetrol' } },
 };
 
 function supabaseFalso() {
@@ -26,16 +26,22 @@ function supabaseFalso() {
 function preparar() {
   const supabase = supabaseFalso();
   const enviados = [];
+  const avisos = [];
   let reloj = 0;
   const rastreo = crearRastreo({
     supabase,
     emitirA: (ids, evento, payload) => enviados.push({ ids, evento, payload }),
+    avisos: {
+      enCamino: (d) => avisos.push({ tipo: 'enCamino', ...d }),
+      llego: (d) => avisos.push({ tipo: 'llego', ...d }),
+    },
     ahora: () => reloj,
   });
   return {
     rastreo,
     supabase,
     enviados,
+    avisos,
     avanzar: (ms) => { reloj += ms; },
   };
 }
@@ -110,4 +116,35 @@ test('un id de reserva inventado tampoco consulta la base en cada intento', asyn
     await rastreo.reenviar(intruso, 'ubicacion', { reservaId: 555, lat: 0, lng: 0 });
   }
   expect(supabase.consultas).toBe(1);
+});
+
+test('avisa "va en camino" una sola vez por viaje, no con cada ubicación', async () => {
+  const { rastreo, avisos, avanzar } = preparar();
+  for (let i = 0; i < 20; i++) {
+    await rastreo.reenviar(cliente, 'ubicacion', { reservaId: 10, lat: -17.78, lng: -63.18 });
+    avanzar(1000);
+  }
+  expect(avisos).toEqual([{
+    tipo: 'enCamino', reservaId: 10, clienteId: 7, duenoId: 3, garajeNombre: 'Garaje Equipetrol',
+  }]);
+
+  // Si sale de nuevo mucho después, se vuelve a avisar.
+  avanzar(PAUSA_AVISO_MS);
+  await rastreo.reenviar(cliente, 'ubicacion', { reservaId: 10, lat: -17.78, lng: -63.18 });
+  expect(avisos).toHaveLength(2);
+});
+
+test('al llegar avisa "llegó"; al detenerse sin llegar, no', async () => {
+  const { rastreo, avisos } = preparar();
+  await rastreo.reenviar(cliente, 'fin_ubicacion', { reservaId: 10 });
+  expect(avisos).toHaveLength(0);
+  await rastreo.reenviar(cliente, 'fin_ubicacion', { reservaId: 10, llego: true });
+  expect(avisos.map((a) => a.tipo)).toEqual(['llego']);
+});
+
+test('un intruso no dispara avisos', async () => {
+  const { rastreo, avisos } = preparar();
+  await rastreo.reenviar(intruso, 'ubicacion', { reservaId: 10, lat: -17.78, lng: -63.18 });
+  await rastreo.reenviar(intruso, 'fin_ubicacion', { reservaId: 10, llego: true });
+  expect(avisos).toHaveLength(0);
 });

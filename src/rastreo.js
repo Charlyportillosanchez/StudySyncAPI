@@ -10,8 +10,15 @@
 
 const DURACION_CACHE_MS = 60 * 1000;
 
-function crearRastreo({ supabase, emitirA, ahora = () => Date.now() }) {
+// El aviso push "va en camino" se manda una vez por viaje (no con cada
+// ubicación); si vuelve a salir después de este tiempo, se avisa de nuevo.
+const PAUSA_AVISO_MS = 30 * 60 * 1000;
+
+const sinAvisos = { enCamino: () => {}, llego: () => {} };
+
+function crearRastreo({ supabase, emitirA, avisos = sinAvisos, ahora = () => Date.now() }) {
   const cache = new Map();
+  const ultimoAviso = new Map();
 
   async function datosReserva(reservaId) {
     const guardado = cache.get(reservaId);
@@ -19,7 +26,7 @@ function crearRastreo({ supabase, emitirA, ahora = () => Date.now() }) {
 
     const { data } = await supabase
       .from('reservas')
-      .select('id, usuario_id, estado, garajes(usuario_id)')
+      .select('id, usuario_id, estado, garajes(usuario_id, nombre)')
       .eq('id', reservaId)
       .single();
 
@@ -27,6 +34,7 @@ function crearRastreo({ supabase, emitirA, ahora = () => Date.now() }) {
       ? {
           clienteId: data.usuario_id,
           duenoId: data.garajes?.usuario_id ?? null,
+          garajeNombre: data.garajes?.nombre || 'tu garaje',
           activa: data.estado === 'activa',
         }
       : null;
@@ -67,6 +75,12 @@ function crearRastreo({ supabase, emitirA, ahora = () => Date.now() }) {
         ...(rumbo != null ? { rumbo } : {}),
         ...(velocidad != null ? { velocidad } : {}),
       });
+
+      const avisado = ultimoAviso.get(reservaId);
+      if (avisado == null || ahora() - avisado > PAUSA_AVISO_MS) {
+        ultimoAviso.set(reservaId, ahora());
+        avisos.enCamino(datosAviso(reservaId, info));
+      }
       return true;
     }
 
@@ -75,13 +89,24 @@ function crearRastreo({ supabase, emitirA, ahora = () => Date.now() }) {
         reservaId,
         ...(data.llego === true ? { llego: true } : {}),
       });
+      ultimoAviso.delete(reservaId);
+      if (data.llego === true) avisos.llego(datosAviso(reservaId, info));
       return true;
     }
 
     return false;
   }
 
+  function datosAviso(reservaId, info) {
+    return {
+      reservaId,
+      clienteId: info.clienteId,
+      duenoId: info.duenoId,
+      garajeNombre: info.garajeNombre,
+    };
+  }
+
   return { reenviar, datosReserva };
 }
 
-module.exports = { crearRastreo, DURACION_CACHE_MS };
+module.exports = { crearRastreo, DURACION_CACHE_MS, PAUSA_AVISO_MS };

@@ -71,6 +71,7 @@ app.use('/api/garajes', garajesRoutes);
 app.use('/api/reservas', reservasRoutes);
 app.use('/api/chat', require('./routes/chat.routes'));
 app.use('/api/vehiculos', require('./routes/vehiculos.routes'));
+app.use('/api/dispositivos', require('./routes/dispositivos.routes'));
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 app.use((err, req, res, next) => {
@@ -90,7 +91,7 @@ setIO(io);
 io.use(identificarSocket);
 
 const supabase = require('./db');
-const rastreo = crearRastreo({ supabase, emitirA });
+const rastreo = crearRastreo({ supabase, emitirA, avisos: require('./avisos') });
 
 io.on('connection', (socket) => {
   const usuario = socket.data.usuario;

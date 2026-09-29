@@ -1,5 +1,6 @@
 const supabase = require('../db');
 const { emitirA } = require('../realtime');
+const avisos = require('../avisos');
 
 // Una conversación se identifica por (garaje_id, cliente_id).
 // Participantes válidos: el cliente y el dueño del garaje (o un admin).
@@ -116,6 +117,13 @@ exports.enviar = async (req, res) => {
     `chat:${garajeId}:${clienteId}`,
     data[0],
   );
+  // Y si tiene la app cerrada, le llega como notificación.
+  avisos.mensajeNuevo({
+    garaje: permiso.garaje,
+    clienteId: Number(clienteId),
+    emisorId: req.usuario.id,
+    texto,
+  });
 
   res.status(201).json(data[0]);
 };
