@@ -1,7 +1,6 @@
 # StudySync API — IoTGaraje
 
 **Alumno:** Charly Portillo Sanchez  
-**CI:** 68883761  
 **Materia:** Programación IV — UPDS 2026
 
 ## Descripción
